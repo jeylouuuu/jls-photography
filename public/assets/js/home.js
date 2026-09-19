@@ -162,6 +162,40 @@
     Lightbox.wireGallery(grid);
   }
 
+  function renderVideos(videos) {
+    var section = qs('#homeVideosSection');
+    var grid = qs('#homeVideoGrid');
+    if (!section || !grid) return;
+    if (!videos.length) { section.style.display = 'none'; return; }
+    grid.innerHTML = videos.slice(0, 6).map(function (v, i) {
+      var media = v.thumbnail_url
+        ? '<img src="' + J.escapeHtml(v.thumbnail_url) + '" alt="' + J.escapeHtml(v.title || '') + '" loading="lazy">'
+        : '<video muted preload="metadata" src="' + J.escapeHtml(v.video_url) + '"></video>';
+      return '<div class="video-card" data-home-video="' + v.id + '" style="opacity:1;transition-delay:' + (i * 60) + 'ms">' +
+        '<div class="video-card__media">' + media + '<div class="video-card__play"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.6v12.8L19 12z"/></svg></div></div>' +
+        '<div class="video-card__body"><b>' + J.escapeHtml(v.title || 'Untitled') + '</b><span>' + J.escapeHtml(v.category_name || 'Film') + '</span></div></div>';
+    }).join('');
+    grid.querySelectorAll('[data-home-video]').forEach(function (card) {
+      card.addEventListener('click', function () {
+        var v = videos.find(function (item) { return item.id === Number(card.getAttribute('data-home-video')); });
+        if (!v) return;
+        var modal = document.createElement('div');
+        modal.className = 'video-modal';
+        modal.innerHTML = '<button class="video-modal__close" aria-label="Close">×</button><div class="video-modal__box"><video src="' +
+          J.escapeHtml(v.video_url) + '" controls autoplay playsinline></video><div class="video-modal__cap"><b>' + J.escapeHtml(v.title || 'Untitled') +
+          '</b>' + (v.description ? '<p>' + J.escapeHtml(v.description) + '</p>' : '') + '</div></div>';
+        document.body.appendChild(modal);
+        requestAnimationFrame(function () { modal.classList.add('is-open'); });
+        modal.addEventListener('click', function (e) {
+          if (e.target === modal || e.target.classList.contains('video-modal__close')) {
+            modal.classList.remove('is-open');
+            setTimeout(function () { if (modal.parentNode) modal.parentNode.removeChild(modal); }, 350);
+          }
+        });
+      });
+    });
+  }
+
   /* ---------------- Review form ---------------- */
   function initReviewForm() {
     var form = qs('#reviewForm');
@@ -260,7 +294,8 @@
       fetch('/api/photos/featured').then(function (r) { return r.ok ? r.json() : []; }).catch(function () { return []; }),
       fetch('/api/photos/recent').then(function (r) { return r.ok ? r.json() : []; }).catch(function () { return []; }),
       fetch('/api/services').then(function (r) { return r.ok ? r.json() : []; }).catch(function () { return []; }),
-      fetch('/api/testimonials').then(function (r) { return r.ok ? r.json() : []; }).catch(function () { return []; })
+      fetch('/api/testimonials').then(function (r) { return r.ok ? r.json() : []; }).catch(function () { return []; }),
+      fetch('/api/videos').then(function (r) { return r.ok ? r.json() : []; }).catch(function () { return []; })
     ]).then(function (res) {
       var photos = res[0];
       renderFeatured(res[1]);
@@ -268,6 +303,7 @@
       renderHomeServices(res[3]);
       renderReviews(res[4]);
       renderRecent(res[2]);
+      renderVideos(res[5]);
     });
 
     loadStats().then(function (stats) {

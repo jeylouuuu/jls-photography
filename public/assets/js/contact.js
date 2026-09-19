@@ -7,6 +7,8 @@
   var J = window.JLS;
   var S = J.settings;
   var qs = J.qs;
+  var bookingMode = false;
+  var serviceRecords = [];
 
   function initContactInfo() {
     qs('#contactPhone').textContent = S.phone || '';
@@ -31,12 +33,14 @@
   function initServiceSelect() {
     var sel = qs('#cService');
     if (!sel) return;
+    try { bookingMode = new URLSearchParams(window.location.search).get('booking') === '1'; } catch (e) {}
     fetch('/api/services').then(function (r) { return r.ok ? r.json() : []; }).then(function (services) {
       var current = qs('#cService').value;
       sel.innerHTML = '<option value="General Inquiry">General Inquiry</option>';
+      serviceRecords = services || [];
       services.forEach(function (s) {
         var opt = document.createElement('option');
-        opt.value = s.name;
+        opt.value = bookingMode ? String(s.id) : s.name;
         opt.textContent = s.name;
         sel.appendChild(opt);
       });
@@ -44,8 +48,14 @@
       try {
         var wanted = new URLSearchParams(window.location.search).get('service');
         if (wanted) {
-          var found = Array.prototype.slice.call(sel.options).some(function (o) { return o.value === wanted; });
-          sel.value = found ? wanted : 'General Inquiry';
+          var found = Array.prototype.slice.call(sel.options).some(function (o) {
+            return bookingMode ? o.textContent === wanted : o.value === wanted;
+          });
+          if (found) {
+            sel.value = bookingMode
+              ? String((serviceRecords.find(function (s) { return s.name === wanted; }) || {}).id || '')
+              : wanted;
+          } else sel.value = bookingMode ? '' : 'General Inquiry';
         } else {
           sel.value = current;
         }
@@ -64,6 +74,13 @@
   function initContactForm() {
     var form = qs('#contactForm');
     if (!form) return;
+    try { bookingMode = new URLSearchParams(window.location.search).get('booking') === '1'; } catch (e) {}
+    if (bookingMode) {
+      qs('#formEyebrow').textContent = 'Booking request';
+      qs('#formHeading').innerHTML = 'Request a <em style="font-style:italic;color:var(--gold-soft)">Booking</em>';
+      qs('#contactSubmitText').textContent = 'Send Booking Request';
+      document.querySelectorAll('.booking-only').forEach(function (el) { el.hidden = false; });
+    }
     form.addEventListener('submit', function (e) {
       e.preventDefault();
       var name = qs('#cName').value.trim();
@@ -71,6 +88,10 @@
       var phone = qs('#cPhone').value.trim();
       var service = qs('#cService').value;
       var preferred_date = qs('#cDate').value;
+      var eventTimeInput = qs('#cTime');
+      var locationInput = qs('#cLocation');
+      var event_time = eventTimeInput ? eventTimeInput.value : '';
+      var location = locationInput ? locationInput.value.trim() : '';
       var message = qs('#cMsg').value.trim();
 
       [qs('#cName'), qs('#cEmail'), qs('#cMsg')].forEach(function (el) { el.style.borderColor = ''; });
@@ -84,24 +105,21 @@
       btn.disabled = true;
       btn.querySelector('span').textContent = 'Sending…';
 
-      fetch('/api/contact', {
+      var endpoint = bookingMode ? '/api/booking' : '/api/contact';
+      var payload = bookingMode
+        ? { booking: true, name: name, email: email, phone: phone, service_id: qs('#cService').value, event_date: preferred_date, event_time: event_time, location: location, message: message }
+        : { name: name, email: email, phone: phone, service: service, preferred_date: preferred_date, message: message };
+      fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: name,
-          email: email,
-          phone: phone,
-          service: service,
-          preferred_date: preferred_date,
-          message: message
-        })
+        body: JSON.stringify(payload)
       })
         .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
         .then(function (res) {
           if (res.ok) {
             form.reset();
             initDateMin();
-            showAlert('#contactAlert', 'Message sent! I will get back to you within 24 hours.', 'ok');
+            showAlert('#contactAlert', bookingMode ? 'Booking request sent! I will get back to you within 24 hours.' : 'Message sent! I will get back to you within 24 hours.', 'ok');
           } else {
             throw new Error((res.j && res.j.error) || 'Could not send message');
           }
@@ -111,7 +129,7 @@
         })
         .finally(function () {
           btn.disabled = false;
-          btn.querySelector('span').textContent = 'Send Message';
+          btn.querySelector('span').textContent = bookingMode ? 'Send Booking Request' : 'Send Message';
         });
     });
   }

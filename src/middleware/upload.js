@@ -3,8 +3,8 @@ const path = require('path');
 const { getUploadsDir } = require('../config/paths');
 
 const IMAGE_TYPES = /jpeg|jpg|png|gif|webp|avif/;
-const VIDEO_TYPES = /mp4|webm/;
-const ALL_TYPES = /jpeg|jpg|png|gif|webp|avif|mp4|webm/;
+const VIDEO_TYPES = /mp4|webm|mov|quicktime/;
+const ALL_TYPES = /jpeg|jpg|png|gif|webp|avif|mp4|webm|mov|quicktime/;
 
 function makeUpload(opts = {}) {
   const {
@@ -27,9 +27,11 @@ function makeUpload(opts = {}) {
   });
 
   const filter = (req, file, cb) => {
-    const isImage = IMAGE_TYPES.test(file.mimetype) || IMAGE_TYPES.test(path.extname(file.originalname || ''));
-    const isVideo = allowVideo && (VIDEO_TYPES.test(file.mimetype) || VIDEO_TYPES.test(path.extname(file.originalname || '')));
-    if ((isImage || isVideo) && allowed.test(file.mimetype + '') ) {
+    const ext = path.extname(file.originalname || '').toLowerCase();
+    const isImage = IMAGE_TYPES.test(file.mimetype) || IMAGE_TYPES.test(ext);
+    const isVideo = allowVideo && (VIDEO_TYPES.test(file.mimetype) || VIDEO_TYPES.test(ext));
+    const matchesAllowed = allowed.test(String(file.mimetype || '')) || allowed.test(ext);
+    if ((isImage || isVideo) && matchesAllowed) {
       return cb(null, true);
     }
     const err = new Error('Invalid file type. Only images' + (allowVideo ? ' and videos' : '') + ' are allowed.');

@@ -7,7 +7,13 @@
   var esc = A.escapeHtml;
   var api = window.AdminApi;
 
-  var state = { reviews: [], tab: 'all' };
+  var state = { reviews: [], tab: 'all', query: '' };
+
+  function matchesQuery(r, q) {
+    if (!q) return true;
+    return [r.client_name, r.client_email, r.role, r.content, r.admin_reply]
+      .some(function (f) { return String(f || '').toLowerCase().indexOf(q) !== -1; });
+  }
 
   var BADGES = {
     pending: { cls: 'badge--pending', label: 'Pending' },
@@ -25,6 +31,7 @@
     }).join('');
 
     var list = state.tab === 'all' ? state.reviews : state.reviews.filter(function (r) { return r.status === state.tab; });
+    list = list.filter(function (r) { return matchesQuery(r, state.query.toLowerCase().trim()); });
 
     var body = list.length
       ? list.map(cardHtml).join('')
@@ -33,6 +40,7 @@
     document.getElementById('view').innerHTML =
       '<div class="panel panel--flush">' +
       '<div class="panel__head"><div><h2>Client reviews</h2><p>' + counts.pending + ' pending approval</p></div>' +
+      '<input type="search" id="reviewSearch" placeholder="Search client or text…" style="width:210px" class="admin-input">' +
       '<button class="btn btn--gold btn--sm" data-add>+ Add manually</button></div>' +
       '<div class="panel__body panel__body--flush">' +
       '<div class="tabs" style="padding:0 22px;margin-top:0">' + tabs + '</div>' +
@@ -46,6 +54,12 @@
       });
     });
     document.querySelector('[data-add]').addEventListener('click', addModal);
+    var searchInput = document.getElementById('reviewSearch');
+    searchInput.value = state.query;
+    searchInput.addEventListener('input', function (e) {
+      state.query = e.target.value;
+      render();
+    });
     document.querySelectorAll('[data-approve]').forEach(function (b) {
       b.addEventListener('click', function () { setStatus(Number(b.getAttribute('data-approve')), 'approved'); });
     });
@@ -56,6 +70,13 @@
       b.addEventListener('click', function () {
         var r = state.reviews.find(function (x) { return x.id === Number(b.getAttribute('data-edit')); });
         if (r) editModal(r);
+      });
+    });
+    document.querySelectorAll('[data-review]').forEach(function (card) {
+      card.addEventListener('click', function (e) {
+        if (e.target.closest('button, a, input, select, textarea')) return;
+        var r = state.reviews.find(function (x) { return x.id === Number(card.getAttribute('data-review')); });
+        if (r) reviewModal(r);
       });
     });
     document.querySelectorAll('[data-del]').forEach(function (b) {
@@ -98,7 +119,7 @@
       : '';
 
     return (
-      '<div class="msg-card" data-id="' + r.id + '">' +
+      '<div class="msg-card msg-card--review" data-id="' + r.id + '" data-review="' + r.id + '" title="Click to read the full review">' +
       '<div class="msg-card__head">' +
       '<span class="avatar">' + avatar + '</span>' +
       '<span class="who"><b>' + esc(r.client_name) + '</b><small>' + esc(r.role || (r.client_email ? r.client_email : 'Client')) + '</small>' + (r.role ? emailRow : '') + '</span>' +
@@ -109,6 +130,35 @@
       reply + imgs +
       '<div class="msg-card__footer">' + actions + '</div>' +
       '</div>'
+    );
+  }
+
+  function reviewModal(r) {
+    var b = BADGES[r.status] || BADGES.pending;
+    var photo = r.photo
+      ? '<div class="field"><label>Client photo</label><img src="' + esc(r.photo) + '" style="max-width:260px;max-height:260px;border-radius:10px;display:block;object-fit:cover"></div>'
+      : '';
+    var reply = r.admin_reply
+      ? '<div class="msg-card__expand"><div class="msg-card__expand-label">Your reply</div><p>' + esc(r.admin_reply) + '</p></div>'
+      : '';
+
+    A.openModal(
+      '<div class="msg-detail__head">' +
+      '<span class="avatar" style="width:50px;height:50px;border-radius:50%;background:var(--panel-2);border:1px solid var(--line-2);display:grid;place-items:center;color:var(--gold-soft);font-weight:700;font-size:18px">' +
+      esc(String(r.client_name || '?').charAt(0).toUpperCase()) + '</span>' +
+      '<div><b style="font-size:17px">' + esc(r.client_name || 'Client') + '</b>' +
+      '<small style="display:block;color:var(--muted)">' + esc(r.role || r.client_email || 'Client') + '</small></div>' +
+      '</div>' +
+      '<div class="kv-list">' +
+      '<div class="kv"><small>Rating</small><strong class="stars">' + A.stars(r.rating) + ' ' + esc(String(r.rating)) + '/5</strong></div>' +
+      '<div class="kv"><small>Status</small><strong><span class="badge ' + b.cls + '">' + b.label + '</span></strong></div>' +
+      '<div class="kv"><small>Date submitted</small><strong>' + esc(A.fmtDate(r.created_at)) + '</strong></div>' +
+      (r.client_email ? '<div class="kv"><small>Email</small><strong>' + esc(r.client_email) + '</strong></div>' : '') +
+      '</div>' +
+      '<div class="msg-card__expand" style="margin-top:18px"><div class="msg-card__expand-label">Full review</div><p>' + esc(r.content || '') + '</p></div>' +
+      reply + photo +
+      '<div class="modal__foot"><button class="btn btn--ghost" data-close>Close</button></div>',
+      { title: 'Client review', size: 'sm' }
     );
   }
 

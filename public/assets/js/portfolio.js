@@ -9,6 +9,7 @@
   var qsa = J.qsa;
   var allPhotos = [];
   var currentFilter = 'all';
+  var videoModal = null;
 
   function urlParam(name) {
     try {
@@ -71,16 +72,86 @@
     Lightbox.wireGallery(grid);
   }
 
+  function renderVideos(videos) {
+    var grid = qs('#videoGrid');
+    if (!grid) return;
+    grid.style.opacity = '1';
+
+    if (!videos.length) {
+      grid.innerHTML = '<div class="video-empty">No films to show yet — new videos coming soon.</div>';
+      return;
+    }
+
+    grid.innerHTML = videos.map(function (v, i) {
+      var media = v.thumbnail_url
+        ? '<img src="' + J.escapeHtml(v.thumbnail_url) + '" alt="' + J.escapeHtml(v.title || '') + '" loading="lazy">'
+        : '<video muted preload="metadata" src="' + J.escapeHtml(v.video_url) + '"></video>';
+      return (
+        '<div class="video-card" data-video="' + v.id + '" style="transition-delay:' + (i * 60) + 'ms">' +
+        '<div class="video-card__media">' + media +
+        '<div class="video-card__play"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.6v12.8L19 12z"/></svg></div></div>' +
+        '<div class="video-card__body"><b>' + J.escapeHtml(v.title || 'Untitled') + '</b>' +
+        '<span>' + J.escapeHtml(v.category_name || 'Film') + '</span></div>' +
+        '</div>'
+      );
+    }).join('');
+
+    requestAnimationFrame(function () {
+      grid.querySelectorAll('.video-card').forEach(function (el) { el.style.opacity = '1'; });
+    });
+
+    qsa('.video-card', grid).forEach(function (card) {
+      card.addEventListener('click', function () { openVideo(videos.find(function (x) { return x.id === Number(card.getAttribute('data-video')); })); });
+    });
+  }
+
+  function openVideo(v) {
+    if (!v || videoModal) return;
+    videoModal = document.createElement('div');
+    videoModal.className = 'video-modal';
+    videoModal.innerHTML =
+      '<button class="video-modal__close" aria-label="Close">×</button>' +
+      '<div class="video-modal__box">' +
+      '<video src="' + J.escapeHtml(v.video_url) + '" controls autoplay playsinline></video>' +
+      '<div class="video-modal__cap"><b>' + J.escapeHtml(v.title || 'Untitled') + '</b>' +
+      (v.description ? '<p>' + J.escapeHtml(v.description) + '</p>' : '') + '</div>' +
+      '</div>';
+    document.body.appendChild(videoModal);
+    requestAnimationFrame(function () { videoModal.classList.add('is-open'); });
+
+    function close() {
+      if (!videoModal) return;
+      videoModal.classList.remove('is-open');
+      var m = videoModal;
+      videoModal = null;
+      setTimeout(function () { if (m.parentNode) m.parentNode.removeChild(m); }, 350);
+      document.removeEventListener('keydown', onKey);
+    }
+    function onKey(e) { if (e.key === 'Escape') close(); }
+    document.addEventListener('keydown', onKey);
+    videoModal.addEventListener('click', function (e) {
+      if (e.target === videoModal || e.target.classList.contains('video-modal__close')) close();
+    });
+  }
+
   function load() {
     Promise.all([
       fetch('/api/photos').then(function (r) { return r.ok ? r.json() : []; }).catch(function () { return []; }),
-      fetch('/api/categories').then(function (r) { return r.ok ? r.json() : []; }).catch(function () { return []; })
+      fetch('/api/categories').then(function (r) { return r.ok ? r.json() : []; }).catch(function () { return []; }),
+      fetch('/api/videos').then(function (r) { return r.ok ? r.json() : []; }).catch(function () { return []; })
     ]).then(function (res) {
       allPhotos = res[0];
       var cat = urlParam('cat');
       if (cat && res[1].some(function (c) { return c.slug === cat; })) currentFilter = cat;
       renderFilters(res[1]);
       renderGallery();
+      var videos = res[2] || [];
+      var videosSection = qs('#videosSection');
+      if (!videos.length) {
+        if (videosSection) videosSection.style.display = 'none';
+      } else {
+        renderVideos(videos);
+      }
     });
   }
 

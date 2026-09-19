@@ -89,9 +89,13 @@
       SOCIALS.map(function (k) { return field(k, k.charAt(0).toUpperCase() + k.slice(1), 'url'); }).join('') +
       '</div></div></div>' +
 
-      '<div class="panel"><div class="panel__head"><div><h2>Email settings (SMTP)</h2><p>Used to send notifications from the contact form</p></div></div><div class="panel__body"><div class="grid-2">' +
+      '<div class="panel"><div class="panel__head"><div><h2>Email settings (SMTP)</h2><p>Sends your replies to customers and notifications from the contact form</p></div></div><div class="panel__body"><div class="grid-2">' +
       SMTP.map(function (row) { return field(row[0], row[1], row[2]); }).join('') +
-      '</div></div></div>' +
+      '</div>' +
+      '<div class="field"><label for="smtpTestTo">Test recipient email</label><input id="smtpTestTo" type="email" value="' + esc(state.settings.notify_email || state.settings.email || '') + '" placeholder="e.g. you@gmail.com"></div>' +
+      '<button class="btn btn--ghost" id="testEmailBtn" type="button"><span>Send test email</span></button>' +
+      '<div class="hint" style="font-size:12.5px;color:var(--dim)">Sends a test email using the SMTP values above — no need to save first. Gmail requires an App Password.</div>' +
+      '</div></div>' +
 
       '<div class="panel"><div class="panel__head"><div><h2>Save</h2></div></div>' +
       '<div class="panel__body"><button class="btn btn--gold" id="saveBtn" type="submit"><span>Save all settings</span></button></div></div>' +
@@ -114,6 +118,7 @@
 
     bindHero();
     bindProfile();
+    bindTestEmail();
     bindPassword();
 
     document.getElementById('settingsForm').addEventListener('submit', function (e) {
@@ -143,6 +148,35 @@
         })
         .catch(function (e) { A.toast(e.message || 'Upload failed.', 'err'); });
       this.value = '';
+    });
+  }
+
+  function bindTestEmail() {
+    var btn = document.getElementById('testEmailBtn');
+    btn.addEventListener('click', function () {
+      function val(id) {
+        var el = document.getElementById(id);
+        return el ? el.value : '';
+      }
+      var payload = {
+        smtp_host: val('smtp_host'),
+        smtp_port: val('smtp_port'),
+        smtp_user: val('smtp_user'),
+        smtp_pass: val('smtp_pass'),
+        smtp_from: val('smtp_from'),
+        smtp_from_name: val('smtp_from_name'),
+        smtp_secure: val('smtp_secure'),
+        to: val('smtpTestTo')
+      };
+      btn.disabled = true;
+      btn.querySelector('span').textContent = 'Sending…';
+      api('/settings/test-email', { method: 'POST', body: JSON.stringify(payload) })
+        .then(function (r) { A.toast(r.message || 'Test email sent — check your inbox.'); })
+        .catch(function (e) { A.toast(e.message || 'Test email failed.', 'err'); })
+        .finally(function () {
+          btn.disabled = false;
+          btn.querySelector('span').textContent = 'Send test email';
+        });
     });
   }
 

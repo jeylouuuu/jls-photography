@@ -16,7 +16,8 @@ function notifyTarget() {
 
 function baseUrl() {
   const cfg = getAllSettings();
-  return String(cfg.site_url || process.env.SITE_URL || '').replace(/\/+$/, '');
+  const u = String(cfg.site_url || process.env.SITE_URL || '').replace(/\/+$/, '').trim();
+  return u || '';
 }
 
 function adminUrl(path) {
@@ -115,6 +116,19 @@ router.get('/photos/featured', (req, res) => {
   res.json(rows);
 });
 
+router.get('/videos', (req, res) => {
+  const db = getDb();
+  const rows = db
+    .prepare(
+      `SELECT v.*, c.name AS category_name, c.slug AS category_slug
+       FROM videos v LEFT JOIN categories c ON v.category_id = c.id
+       WHERE v.is_published = 1
+       ORDER BY v.created_at DESC, v.id DESC`
+    )
+    .all();
+  res.json(rows);
+});
+
 router.get('/photos/recent', (req, res) => {
   const db = getDb();
   const limit = Math.min(parseInt(req.query.limit || '6', 10) || 6, 20);
@@ -198,14 +212,33 @@ router.post('/testimonials', reviewUpload.single('photo'), (req, res) => {
 
 router.post('/contact', (req, res) => {
   const db = getDb();
+  if (req.body && (req.body.booking === true || req.body.booking === '1')) {
+    const { name, email, phone, service_id, event_date, event_time, location, message } = req.body;
+    if (!name || !email) return res.status(400).json({ error: 'Name and email are required' });
+    db.exec('BEGIN');
+    try {
+      const cust = db.prepare('INSERT INTO customers (name, email, phone) VALUES (?, ?, ?)').run(String(name), String(email), String(phone || ''));
+      db.prepare(
+        `INSERT INTO bookings (customer_id, service_id, customer_name, customer_email, customer_phone, event_date, event_time, location, message, status, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', datetime('now'))`
+      ).run(Number(cust.lastInsertRowid), service_id ? parseInt(service_id, 10) || null : null, String(name), String(email), String(phone || ''),
+        String(event_date || ''), String(event_time || ''), String(location || ''), String(message || ''));
+      db.exec('COMMIT');
+      return res.status(201).json({ ok: true, message: 'Booking request received' });
+    } catch (e) {
+      db.exec('ROLLBACK');
+      console.error('Booking save error:', e.message);
+      return res.status(500).json({ error: 'Could not save booking. Please try again.' });
+    }
+  }
   const { name, email, phone, subject, message, service, preferred_date } = req.body || {};
   if (!name || !email || !message) {
     return res.status(400).json({ error: 'Name, email and message are required' });
   }
   try {
     db.prepare(
-      `INSERT INTO messages (name, email, phone, subject, message, service, preferred_date, is_read)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 0)`
+      `INSERT INTO messages (name, email, phone, subject, message, service, preferred_date, is_read, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 0, datetime('now'))`
     ).run(
       String(name).trim().slice(0, 120),
       String(email).trim(),

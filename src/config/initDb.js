@@ -1,5 +1,19 @@
 const bcrypt = require('bcryptjs');
+const fs = require('fs');
+const path = require('path');
 const { getDb } = require('./db');
+const { getUploadsDir, getSeedAssetsDir } = require('./paths');
+
+function requireProductionEnv(name, fallback) {
+  const value = process.env[name];
+  if (process.env.NODE_ENV === 'production') {
+    if (!value || value === 'REPLACE_WITH_48_byte_random_hex' || value === 'REPLACE_WITH_STRONG_PASSWORD') {
+      throw new Error(`Missing or unsafe production env var: ${name}`);
+    }
+    return value;
+  }
+  return value || fallback;
+}
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS admins (
@@ -9,6 +23,11 @@ CREATE TABLE IF NOT EXISTS admins (
   password_hash TEXT NOT NULL,
   full_name TEXT,
   created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS settings (
+  setting_key TEXT PRIMARY KEY,
+  setting_value TEXT DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS customers (
@@ -79,6 +98,45 @@ CREATE TABLE IF NOT EXISTS messages (
   created_at TEXT DEFAULT (datetime('now'))
 );
 
+CREATE TABLE IF NOT EXISTS message_replies (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  message_id INTEGER NOT NULL,
+  reply_body TEXT NOT NULL,
+  reply_to TEXT NOT NULL,
+  subject TEXT DEFAULT '',
+  email_status TEXT DEFAULT 'sent',
+  error_text TEXT DEFAULT '',
+  sent_at TEXT DEFAULT (datetime('now')),
+  FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS booking_replies (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  booking_id INTEGER NOT NULL,
+  reply_body TEXT NOT NULL,
+  reply_to TEXT NOT NULL,
+  subject TEXT DEFAULT '',
+  email_status TEXT DEFAULT 'sent',
+  error_text TEXT DEFAULT '',
+  sent_at TEXT DEFAULT (datetime('now')),
+  FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS videos (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  title TEXT DEFAULT '',
+  description TEXT DEFAULT '',
+  video_url TEXT NOT NULL,
+  thumbnail_url TEXT DEFAULT '',
+  category_id INTEGER,
+  is_published INTEGER DEFAULT 0,
+  created_at TEXT DEFAULT (datetime('now')),
+  FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_message_replies_message ON message_replies(message_id);
+CREATE INDEX IF NOT EXISTS idx_videos_category ON videos(category_id);
+
 CREATE TABLE IF NOT EXISTS testimonials (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   client_name TEXT NOT NULL,
@@ -99,6 +157,8 @@ CREATE INDEX IF NOT EXISTS idx_photos_category ON photos(category_id);
 CREATE INDEX IF NOT EXISTS idx_bookings_status ON bookings(status);
 CREATE INDEX IF NOT EXISTS idx_bookings_customer ON bookings(customer_id);
 CREATE INDEX IF NOT EXISTS idx_messages_read ON messages(is_read);
+
+UPDATE photos SET media_type = 'image' WHERE media_type IS NULL OR media_type = '';
 `;
 
 function columnExists(table, col) {
@@ -132,10 +192,10 @@ const DEFAULT_SETTINGS = {
   experience_years: '10+',
   projects_count: '500+',
   clients_count: '350+',
-  location_label: 'Cebu, Philippines',
-  address: 'Cebu, Philippines',
-  email: 'hello@jlsphotography.com',
-  phone: '+63 917 555 0123',
+  location_label: 'Cebu Lapu Lapu City, Philippines',
+  address: 'Cebu Lapu Lapu City, Philippines',
+  email: 'jlsphotographyofficial@gmail.com',
+  phone: '09368461219',
   map_embed: '',
   currency_symbol: '$',
   facebook: 'https://www.facebook.com/',
@@ -235,6 +295,49 @@ const SEED_SERVICES = [
   }
 ];
 
+const RESTORED_SERVICES = [
+  {
+    name: 'Essential Session',
+    price: 249,
+    duration: '1.5 hours',
+    description: 'Perfect for individuals or small families looking for a polished portrait session.',
+    features: ['1.5 hour session', '20 edited photos', 'Online gallery', 'One location'],
+    image_url: '/uploads/1789727473307-591882042.jpg'
+  },
+  {
+    name: 'Classic Collection',
+    price: 499,
+    duration: '3 hours',
+    description: 'A balanced package ideal for families, engagements, or creative portrait shoots.',
+    features: ['3 hour session', '60 edited photos', 'Online gallery + print release', 'One location + outfit change'],
+    image_url: '/uploads/1789727485546-843038608.jpg'
+  },
+  {
+    name: 'Premier Package',
+    price: 899,
+    duration: '6 hours',
+    description: 'Full-day coverage for weddings, large events, or comprehensive brand shoots.',
+    features: ['6 hour session', '150+ edited photos', 'Online gallery + USB', 'Second photographer', 'Two locations', 'Sneak peek within 48h'],
+    image_url: '/uploads/1789727492774-763509811.jpg'
+  },
+  {
+    name: 'Signature Wedding',
+    price: 1499,
+    duration: 'Full day (10 hrs)',
+    description: 'Complete wedding-day storytelling from preparations to the last dance.',
+    features: ['10 hour coverage', 'Unlimited edited photos', 'Online gallery + keepsake USB', 'Second photographer + assistant', 'Engagement session included', 'Preview gallery within 24h', 'Print rights'],
+    image_url: '/uploads/1789727498850-324241910.jpg'
+  },
+  {
+    name: 'Corporate & Events',
+    price: 699,
+    duration: '4 hours',
+    description: 'Professional coverage for conferences, launches, galas, and company celebrations.',
+    features: ['4 hour coverage', '100+ edited photos', 'Quick turnaround (72h)', 'On-site highlights'],
+    image_url: '/uploads/1789727504826-930035531.jpg'
+  }
+];
+
 const SEED_PHOTOS = [
   ['Golden Hour Rivals', 'A quiet street corner glowing under late afternoon light.', '/uploads/street-1.jpg', 5, 1],
   ['First Look', 'The emotional moment before the ceremony begins.', '/uploads/wedding-2.jpg', 1, 1],
@@ -256,6 +359,12 @@ const SEED_PHOTOS = [
   ['Lone Voyager', 'A single boat drifting across a mirror-still lake.', '/uploads/landscape-18.jpg', 4, 0]
 ];
 
+function removeSeedGalleryPhotos(db) {
+  const urls = SEED_PHOTOS.map((photo) => photo[2]);
+  const placeholders = urls.map(() => '?').join(', ');
+  db.prepare(`DELETE FROM photos WHERE image_url IN (${placeholders})`).run(...urls);
+}
+
 function migrate() {
   const db = getDb();
   db.exec(SCHEMA);
@@ -274,28 +383,18 @@ function migrate() {
   );
   for (const [k, v] of Object.entries(DEFAULT_SETTINGS)) upsertSetting.run(k, v);
 
+  removeSeedGalleryPhotos(db);
+
   const done = db.prepare("SELECT setting_value FROM settings WHERE setting_key = '_seed_finished'").get();
   if (!done) {
-    if (db.prepare('SELECT COUNT(*) c FROM photos').get().c === 0) {
-      const insertPhoto = db.prepare(
-        'INSERT INTO photos (title, description, image_url, category_id, is_featured, is_published, media_type) VALUES (?, ?, ?, ?, ?, 1, ?)'
-      );
-      for (const [title, desc, url, cat, feat] of SEED_PHOTOS) insertPhoto.run(title, desc, url, cat, feat, 'image');
-    }
-    if (db.prepare('SELECT COUNT(*) c FROM services').get().c === 0) {
-      const insertService = db.prepare(
-        'INSERT INTO services (name, price, duration, description, features, image_url, is_active) VALUES (?, ?, ?, ?, ?, ?, 1)'
-      );
-      for (const s of SEED_SERVICES) insertService.run(s.name, s.price, s.duration, s.description, JSON.stringify(s.features), s.image_url);
-    }
     db.prepare("INSERT OR IGNORE INTO settings (setting_key, setting_value) VALUES ('_seed_finished', '1')").run();
   }
 
   const seedAdmin = db.prepare('SELECT * FROM admins LIMIT 1').get();
   if (!seedAdmin) {
-    const username = process.env.ADMIN_USERNAME || 'admin';
+    const username = requireProductionEnv('ADMIN_USERNAME', 'jls');
     const email = process.env.ADMIN_EMAIL || 'admin@jlsphotography.com';
-    const password = process.env.ADMIN_PASSWORD || 'Admin@12345';
+    const password = requireProductionEnv('ADMIN_PASSWORD', 'Admin@12345');
     const hash = bcrypt.hashSync(password, 12);
     db.prepare('INSERT INTO admins (username, email, password_hash, full_name) VALUES (?, ?, ?, ?)').run(
       username,
@@ -307,6 +406,15 @@ function migrate() {
 
   const setServiceImages = db.prepare("UPDATE services SET image_url = ? WHERE name = ? AND (image_url IS NULL OR image_url = '')");
   for (const s of SEED_SERVICES) setServiceImages.run(s.image_url, s.name);
+
+  if (db.prepare('SELECT COUNT(*) c FROM services').get().c === 0) {
+    const insertService = db.prepare(
+      'INSERT INTO services (name, price, duration, description, features, image_url, is_active) VALUES (?, ?, ?, ?, ?, ?, 1)'
+    );
+    for (const s of RESTORED_SERVICES) {
+      insertService.run(s.name, s.price, s.duration, s.description, JSON.stringify(s.features), s.image_url);
+    }
+  }
 
   const getSettingRaw = db.prepare('SELECT setting_value FROM settings WHERE setting_key = ?');
   const heroRow = getSettingRaw.get('hero_image');
@@ -321,8 +429,40 @@ function migrate() {
   }
 }
 
+function syncSeedUploads() {
+  const db = getDb();
+  const uploadsDir = getUploadsDir();
+  const seedDir = getSeedAssetsDir();
+  if (!fs.existsSync(seedDir)) return;
+
+  const urls = new Set();
+  for (const r of db.prepare('SELECT image_url FROM photos WHERE image_url IS NOT NULL').all())
+    if (String(r.image_url).startsWith('/uploads/')) urls.add(r.image_url);
+  for (const r of db.prepare("SELECT image_url FROM services WHERE image_url IS NOT NULL AND image_url != ''").all())
+    if (String(r.image_url).startsWith('/uploads/')) urls.add(r.image_url);
+  for (const r of db.prepare("SELECT setting_value FROM settings WHERE setting_key IN ('hero_image','about_image')").all()) {
+    const v = String(r.setting_value || '');
+    if (v.startsWith('/uploads/')) urls.add(v);
+  }
+
+  let copied = 0;
+  for (const url of urls) {
+    const name = url.replace(/^\/uploads\//, '');
+    if (!name || name.includes('..')) continue;
+    const dest = path.join(uploadsDir, name);
+    if (fs.existsSync(dest)) continue;
+    const src = path.join(seedDir, name);
+    if (!fs.existsSync(src)) continue;
+    fs.mkdirSync(path.dirname(dest), { recursive: true });
+    fs.copyFileSync(src, dest);
+    copied++;
+  }
+  if (copied > 0) console.log('[initDb] copied %d seed asset(s) into %s', copied, uploadsDir);
+}
+
 function initDb() {
   migrate();
+  syncSeedUploads();
 }
 
 module.exports = { initDb, migrate };

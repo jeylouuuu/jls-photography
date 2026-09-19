@@ -42,7 +42,7 @@
         (s.duration ? '<span class="dur">' + J.escapeHtml(s.duration) + '</span>' : '') +
         '<p>' + J.escapeHtml(s.description || '') + '</p>' +
         '<div style="display:flex;gap:10px;flex-wrap:wrap">' +
-        '<a class="btn btn--gold btn--sm" href="/contact?service=' + encodeURIComponent(s.name) + '">Book Now</a>' +
+        '<a class="btn btn--gold btn--sm" href="/booking?service=' + encodeURIComponent(s.name) + '">Book Now</a>' +
         '<a class="btn btn--ghost btn--sm" href="#svc-' + s.id + '">Details</a></div></div></article>'
       );
     }).join('');
@@ -63,7 +63,7 @@
         featuresHtml(s.features) +
         priceHtml(s) +
         '<div style="display:flex;gap:10px;flex-wrap:wrap">' +
-        '<a class="btn btn--gold" href="/contact?service=' + encodeURIComponent(s.name) + '">Book This Service</a>' +
+        '<a class="btn btn--gold" href="/booking?service=' + encodeURIComponent(s.name) + '">Book This Service</a>' +
         '<a class="btn btn--dark" href="/portfolio">See Examples</a></div>' +
         '</div></div>'
       );

@@ -1,0 +1,19 @@
+[Unit]
+Description=JLS Photography portfolio + admin (node:sqlite)
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/jls
+ExecStart=/usr/bin/node src/server.js
+Restart=on-failure
+RestartSec=3
+# EnvironmentFile: drop a .env here instead of committing secrets to code
+EnvironmentFile=/var/www/jls/.env
+Environment=NODE_ENV=production
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target

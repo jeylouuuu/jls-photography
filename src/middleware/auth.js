@@ -1,6 +1,17 @@
 const jwt = require('jsonwebtoken');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'jls-change-this-in-production';
+function requireProductionEnv(name, fallback) {
+  const value = process.env[name];
+  if (process.env.NODE_ENV === 'production') {
+    if (!value || value === 'REPLACE_WITH_48_byte_random_hex' || value === 'REPLACE_WITH_STRONG_PASSWORD') {
+      throw new Error(`Missing or unsafe production env var: ${name}`);
+    }
+    return value;
+  }
+  return value || fallback;
+}
+
+const JWT_SECRET = requireProductionEnv('JWT_SECRET', 'jls-change-this-in-production');
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
 
 function signToken(payload) {

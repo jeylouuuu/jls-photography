@@ -21,9 +21,11 @@
       '<div class="stat-grid">' +
       statCard('Published photos', s.publishedPhotos, 'image') +
       statCard('Total photos', s.totalPhotos, 'aperture') +
+      statCard('Published videos', s.publishedVideos, 'video', 'stat-card--ok') +
+      statCard('Total videos', s.totalVideos, 'video') +
       statCard('Pending reviews', s.pendingReviews, 'star', 'stat-card--danger') +
-      statCard('Unread messages', s.unreadMessages, 'mail', 'stat-card--info') +
       statCard('Approved reviews', s.approvedReviews, 'star', 'stat-card--ok') +
+      statCard('Unread messages', s.unreadMessages, 'mail', 'stat-card--info') +
       statCard('Total messages', s.totalMessages, 'mail') +
       statCard('Services', s.totalServices, 'briefcase') +
       statCard('Bookings', s.totalBookings, 'gear') +
@@ -99,11 +101,34 @@
     );
   }
 
+  function recentBookings(list) {
+    if (!list || !list.length) {
+      return '<div class="empty-state">' + A.icon('calendar') + '<p>No bookings yet.</p></div>';
+    }
+    return (
+      '<div class="booking-list">' +
+      list.map(function (b) {
+        var event = [b.event_date, b.event_time].filter(Boolean).join(' · ') || 'Date not specified';
+        var contact = [b.customer_email, b.customer_phone].filter(Boolean).join(' · ');
+        return '<article class="booking-item">' +
+          '<div class="booking-item__head"><div><b>' + esc(b.customer_name) + '</b><small>' + esc(contact || 'No contact details') + '</small></div>' +
+          '<span class="badge badge--' + esc(b.status || 'pending') + '">' + esc(b.status || 'pending') + '</span></div>' +
+          '<div class="booking-item__details"><span><b>Service:</b> ' + esc(b.service_name || 'General booking') + '</span>' +
+          '<span><b>Event:</b> ' + esc(event) + '</span>' +
+          (b.location ? '<span><b>Location:</b> ' + esc(b.location) + '</span>' : '') +
+          (b.message ? '<span><b>Message:</b> ' + esc(b.message) + '</span>' : '') +
+          '</div><small class="booking-item__date">Received: ' + esc(A.fmtDate(b.created_at)) + '</small></article>';
+      }).join('') +
+      '</div>'
+    );
+  }
+
   function linksRow() {
     return (
-      '<div class="grid-2 mt">' +
-      '<a class="btn btn--gold btn--block" href="/admin/photos">Upload photos</a>' +
-      '<a class="btn btn--ghost btn--block" href="/admin/reviews">Manage reviews</a>' +
+      '<div class="grid-3 mt">' +
+      '<a class="btn btn--gold btn--block" href="' + A.siteUrl() + '" target="_blank" rel="noopener">View Site →</a>' +
+      '<a class="btn btn--ghost btn--block" href="/admin/photos">Upload photos</a>' +
+      '<a class="btn btn--ghost btn--block" href="/admin/videos">Upload videos</a>' +
       '</div>'
     );
   }
@@ -121,12 +146,15 @@
           esc(d.stats.totalPhotos) + ' total</p></div><a class="btn btn--dark btn--sm" href="/admin/photos">Manage →</a></div><div class="panel__body panel__body--flush">' +
           recentPhotos(d.recent.photos) + '</div></div>' +
           '<div>' +
-          '<div class="panel panel--flush"><div class="panel__head"><div><h2>Pending Reviews</h2><p>' +
+          '<div class="panel panel--flush"><div class="panel__head"><div><h2>Client Reviews</h2><p>' +
           esc(d.stats.pendingReviews) + ' awaiting approval</p></div><a class="btn btn--dark btn--sm" href="/admin/reviews">Manage →</a></div><div class="panel__body panel__body--flush">' +
           recentReviews(d.recent.reviews) + '</div></div>' +
-          '<div class="panel panel--flush" style="margin-top:22px"><div class="panel__head"><div><h2>Latest Messages</h2><p>' +
+          '<div class="panel panel--flush" style="margin-top:22px"><div class="panel__head"><div><h2>Contact Messages</h2><p>' +
           esc(d.stats.unreadMessages) + ' unread</p></div><a class="btn btn--dark btn--sm" href="/admin/messages">Manage →</a></div><div class="panel__body panel__body--flush">' +
           recentMessages(d.recent.messages) + '</div></div>' +
+          '<div class="panel panel--flush booking-panel" style="margin-top:22px"><div class="panel__head"><div><h2>Booking Requests</h2><p>' +
+          esc(d.stats.totalBookings) + ' total</p></div></div><div class="panel__body panel__body--flush">' +
+          recentBookings(d.recent.bookings) + '</div></div>' +
           '</div>' +
           '</div>' +
           linksRow();

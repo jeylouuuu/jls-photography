@@ -1,0 +1,28 @@
+# JLS Photography — Caddy v2 reverse proxy + auto HTTPS (Let's Encrypt)
+# Used by docker-compose.yml. Caddy auto-provisions & renews TLS certs.
+#       {$SITE_DOMAIN}   the public site URL (e.g. https://jls.example.com)
+#       JLS_UPSTREAM_IP  app container addr (defaults to app:3000 via compose)
+
+{$SITE_DOMAIN} {
+	encode zstd gzip
+
+	# Photo/video uploads + gallery display remote uploads
+	request_body {
+		max_size 30MB
+	}
+
+	reverse_proxy {$JLS_UPSTREAM_IP:app:3000}
+
+	header {
+		X-Content-Type-Options "nosniff"
+		Strict-Transport-Security "max-age=31536000"
+		-X-Powered-By
+	}
+
+	log {
+		output file /data/logs/access.log {
+			roll_size 20MiB
+			roll_keep 10
+		}
+	}
+}

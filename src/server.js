@@ -24,7 +24,7 @@ const { getUploadsDir } = require('./config/paths');
 
 app.use('/uploads', express.static(getUploadsDir(), { maxAge: '7d', fallthrough: true }));
 app.use('/assets', express.static(ASSETS_DIR, { maxAge: '1h' }));
-app.use('/admin', express.static(ADMIN_DIR, { maxAge: '1h' }));
+app.use('/admin', express.static(ADMIN_DIR, { maxAge: 0 }));
 
 app.use('/api/auth', require('./routes/auth.routes'));
 app.use('/api/admin', require('./routes/admin.routes'));
@@ -48,6 +48,11 @@ const PAGE_ROUTES = {
 app.get('*', (req, res, next) => {
   let urlPath = req.path;
   if (urlPath !== '/' && urlPath.endsWith('/')) urlPath = urlPath.slice(0, -1);
+
+  if (urlPath === '/booking') {
+    const query = req.originalUrl.indexOf('?') >= 0 ? req.originalUrl.slice(req.originalUrl.indexOf('?') + 1) : '';
+    return res.redirect('/contact?booking=1' + (query ? '&' + query : ''));
+  }
 
   // Admin pages
   if (urlPath.startsWith('/admin')) {

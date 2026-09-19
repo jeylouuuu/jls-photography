@@ -1,0 +1,61 @@
+# Render Blueprint — JLS Photography (node:sqlite).
+# Create a Blueprint instance from this repo on render.com — it auto-builds
+# the service, provisions a 1 GB persistent disk, and wires env vars.
+#
+# Required before importing (set in Render dashboard env or secret files):
+#   JWT_SECRET            long random string (signing key, REQUIRED)
+#   ADMIN_USERNAME
+#   ADMIN_PASSWORD        use a strong unique value
+#   SMTP_HOST / SMTP_PORT / SMTP_USER / SMTP_PASS   (email notify; optional)
+#   SITE_URL              https://<your-subdomain>.onrender.com
+#   NOTIFY_EMAIL          admin inbox where contact/review alerts go
+#
+# The SQLite DB + uploaded photos live on the mounted DISK (/data), so they
+# survive redeploys and restarts.
+
+services:
+  - type: web
+    name: jls-photography
+    runtime: node
+    plan: starter
+    autoDeploy: true
+    buildCommand: npm ci --omit=dev
+    startCommand: node src/server.js
+    healthCheckPath: /health
+    disk:
+      name: jls-data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      # Render's node runtime reads NODE_VERSION to pick the builder image.
+      # We need >= 22.13 for the built-in node:sqlite, 24 is the safest.
+      - key: NODE_VERSION
+        value: "24"
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "3000"
+      - key: HOST
+        value: "0.0.0.0"
+      - key: DB_PATH
+        value: /data/photography.db
+      - key: UPLOADS_DIR
+        value: /data/uploads
+      - key: JWT_SECRET
+        sync: false
+      - key: SITE_URL
+        sync: false
+      - key: NOTIFY_EMAIL
+        sync: false
+      - key: ADMIN_USERNAME
+        value: jls
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
