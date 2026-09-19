@@ -118,6 +118,11 @@ h1, h2, h3, h4 { font-family: var(--font-head); font-weight: 500; line-height: 1
   width: auto;
   height: 42px;
 }
+.brand--logo-only {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
 .brand-logo {
   display: block;
   width: 42px !important;
