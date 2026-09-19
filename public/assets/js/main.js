@@ -202,6 +202,35 @@
     items.forEach(function (el) { io.observe(el); });
   }
 
+  /* ---------------- Page transitions ---------------- */
+  function initPageTransitions() {
+    var overlay = document.getElementById('pageTransition');
+
+    // Fade in on load
+    document.body.style.opacity = '0';
+    requestAnimationFrame(function () {
+      document.body.style.transition = 'opacity 0.4s ease';
+      document.body.style.opacity = '1';
+    });
+
+    // Intercept nav links for fade-out transition
+    qsa('a[href]').forEach(function (a) {
+      var href = a.getAttribute('href');
+      if (!href || href.indexOf('#') === 0 || href.indexOf('mailto:') === 0 || href.indexOf('tel:') === 0) return;
+      if (a.target === '_blank') return;
+      if (a.closest('.main-nav, .nav-link, .brand')) {
+        a.addEventListener('click', function (e) {
+          var dest = a.getAttribute('href');
+          if (dest === window.location.pathname) return;
+          e.preventDefault();
+          document.body.classList.add('is-leaving');
+          if (overlay) overlay.classList.add('is-active');
+          setTimeout(function () { window.location.href = dest; }, 350);
+        });
+      }
+    });
+  }
+
   /* ---------------- Boot ---------------- */
   function boot() {
     fetch('/api/settings')
@@ -223,6 +252,7 @@
   document.addEventListener('DOMContentLoaded', function () {
     initNav();
     initReveal();
+    initPageTransitions();
     boot();
     if (window.JLS.onReady) window.JLS.onReady();
   });

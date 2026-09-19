@@ -59,6 +59,26 @@ h1, h2, h3, h4 { font-family: var(--font-head); font-weight: 500; line-height: 1
 
 .container--wide { max-width: 1420px; }
 
+/* ---------- Page transition ---------- */
+.page-transition {
+  position: fixed;
+  inset: 0;
+  background: var(--ink);
+  z-index: 9999;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.35s ease;
+}
+.page-transition.is-active {
+  opacity: 1;
+  pointer-events: all;
+}
+body.is-leaving {
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
 /* ---------- Reveal animation ---------- */
 .reveal { opacity: 0; transform: translateY(26px); transition: opacity 0.9s var(--ease), transform 0.9s var(--ease); }
 .reveal.is-visible { opacity: 1; transform: none; }
